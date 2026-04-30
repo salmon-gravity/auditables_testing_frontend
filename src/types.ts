@@ -78,3 +78,16 @@ export interface UploadProgressEvent {
   total: number;
   chapter?: ChapterContext;
 }
+
+export type DiagnosticLevel = "debug" | "info" | "warn" | "error";
+
+export interface UploadDiagnosticEvent {
+  timestamp: string;
+  level: DiagnosticLevel;
+  event: string;
+  message: string;
+  requestId?: string;
+  recordId?: string;
+  chapter?: ChapterContext;
+  details?: Record<string, string | number | boolean | null>;
+}

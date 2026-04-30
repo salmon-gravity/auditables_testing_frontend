@@ -475,6 +475,21 @@ input[type="file"]::file-selector-button {
   font-size: 0.82rem;
 }
 
+.large-pdf-warning {
+  background: #fff0c8;
+  border: 1px solid #f0cf79;
+  border-radius: 999px;
+  color: #805400;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 900;
+  margin-left: 7px;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .queue-status {
   border-radius: 999px;
   color: #263449;
@@ -513,13 +528,120 @@ input[type="file"]::file-selector-button {
   align-items: center;
   color: #a33224;
   display: flex;
+  flex-wrap: wrap;
   gap: 7px;
   font-size: 0.84rem;
+}
+
+.queue-error code,
+.diagnostic-row-meta code {
+  background: #f2f5f8;
+  border: 1px solid #dce3ed;
+  border-radius: 5px;
+  color: #263449;
+  font-size: 0.74rem;
+  padding: 2px 5px;
 }
 
 .queue-cancel {
   justify-self: start;
   min-height: 32px;
+}
+
+.queue-diagnostics {
+  background: rgb(255 255 255 / 0.72);
+  border: 1px solid #dce3ed;
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+
+.queue-diagnostics summary {
+  color: #566276;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.diagnostic-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.diagnostic-row {
+  border-left: 3px solid #a9b4c3;
+  display: grid;
+  gap: 4px;
+  padding: 5px 0 5px 8px;
+}
+
+.diagnostic-row.info {
+  border-left-color: #2364aa;
+}
+
+.diagnostic-row.warn {
+  border-left-color: #df9d1c;
+}
+
+.diagnostic-row.error {
+  border-left-color: #d14a3a;
+}
+
+.diagnostic-row-head,
+.diagnostic-row-meta,
+.diagnostic-details {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diagnostic-row-head {
+  color: #667287;
+  font-size: 0.78rem;
+}
+
+.diagnostic-row-head strong {
+  color: #263449;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-row-meta,
+.diagnostic-details {
+  color: #667287;
+  font-size: 0.74rem;
+}
+
+.diagnostic-level {
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+.diagnostic-level.info {
+  background: #edf3fb;
+  color: #1d568f;
+}
+
+.diagnostic-level.warn {
+  background: #fff0c8;
+  color: #805400;
+}
+
+.diagnostic-level.error {
+  background: #ffe3e0;
+  color: #a33224;
+}
+
+.diagnostic-details span {
+  background: #f7f9fc;
+  border: 1px solid #e3e8f0;
+  border-radius: 999px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 2px 6px;
 }
 
 .state-error,

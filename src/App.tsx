@@ -17,9 +17,10 @@ import {
 import { deleteHistory, fetchHistory, updateAuditableReview, uploadPdf } from "./api";
 import { computeHistoryInsights } from "./insights";
 import type { DepartmentInsight, HistoryInsights, PdfInsight } from "./insights";
-import type { AuditableReviewRow, HistoryRecord, ReviewStatus } from "./types";
+import type { AuditableReviewRow, HistoryRecord, ReviewStatus, UploadDiagnosticEvent } from "./types";
 
 const defaultApiBaseUrl = "http://dev.gravity.ind.in:8001";
+const largePdfWarningSize = 100 * 1024 * 1024;
 const statusLabels: Record<ReviewStatus, string> = {
   unmarked: "Unmarked",
   correct: "Correct",
@@ -40,6 +41,8 @@ interface QueueItem {
   total: number;
   error: string;
   recordId: string;
+  requestId: string;
+  diagnostics: UploadDiagnosticEvent[];
 }
 
 type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "remark">>;
@@ -202,7 +205,9 @@ export default function App() {
           message: "Uploading PDF",
           done: 0,
           total: 0,
-          error: ""
+          error: "",
+          requestId: "",
+          diagnostics: []
         });
 
         try {
@@ -213,7 +218,7 @@ export default function App() {
               done: event.done,
               total: event.total
             });
-          });
+          }, (event) => appendQueueDiagnostic(item.id, event));
 
           updateQueueItem(item.id, {
             status: "completed",
@@ -226,10 +231,12 @@ export default function App() {
           setSelectedAuditableId(record.auditables[0]?.id || "");
           setQuery("");
         } catch (error) {
+          const requestId = getErrorRequestId(error);
           updateQueueItem(item.id, {
             status: "failed",
             message: "Failed",
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
+            requestId: requestId || queueItemsRef.current.find((current) => current.id === item.id)?.requestId || ""
           });
         }
       }
@@ -240,6 +247,22 @@ export default function App() {
 
   function updateQueueItem(itemId: string, patch: Partial<QueueItem>) {
     const next = queueItemsRef.current.map((item) => (item.id === itemId ? { ...item, ...patch } : item));
+    queueItemsRef.current = next;
+    setQueueItems(next);
+  }
+
+  function appendQueueDiagnostic(itemId: string, event: UploadDiagnosticEvent) {
+    const next = queueItemsRef.current.map((item) => {
+      if (item.id !== itemId) {
+        return item;
+      }
+
+      return {
+        ...item,
+        requestId: item.requestId || event.requestId || "",
+        diagnostics: [...item.diagnostics, event].slice(-40)
+      };
+    });
     queueItemsRef.current = next;
     setQueueItems(next);
   }
@@ -441,7 +464,10 @@ function QueuePanel({
             <div className="queue-row-main">
               <div>
                 <strong>{item.name}</strong>
-                <span>{formatFileSize(item.size)}</span>
+                <span>
+                  {formatFileSize(item.size)}
+                  {isLargePdf(item.size) ? <em className="large-pdf-warning">Large PDF</em> : null}
+                </span>
               </div>
               <span className={`queue-status ${item.status}`}>{formatQueueStatus(item.status)}</span>
             </div>
@@ -460,8 +486,11 @@ function QueuePanel({
               <div className="queue-error">
                 <AlertTriangle size={15} />
                 <span>{item.error}</span>
+                {item.requestId ? <code>Request ID: {item.requestId}</code> : null}
               </div>
             ) : null}
+
+            <QueueDiagnostics events={item.diagnostics} />
 
             {item.status === "queued" ? (
               <button className="ghost-button queue-cancel" type="button" onClick={() => onCancelItem(item.id)}>
@@ -472,6 +501,46 @@ function QueuePanel({
         ))}
       </div>
     </section>
+  );
+}
+
+function QueueDiagnostics({ events }: { events: UploadDiagnosticEvent[] }) {
+  const recentEvents = events.slice(-12);
+
+  if (!recentEvents.length) {
+    return null;
+  }
+
+  return (
+    <details className="queue-diagnostics">
+      <summary>Diagnostics ({events.length})</summary>
+      <div className="diagnostic-list">
+        {recentEvents.map((event, index) => (
+          <div className={`diagnostic-row ${event.level}`} key={`${event.timestamp}-${event.event}-${index}`}>
+            <div className="diagnostic-row-head">
+              <span>{formatDiagnosticTime(event.timestamp)}</span>
+              <span className={`diagnostic-level ${event.level}`}>{event.level}</span>
+              <strong>{event.message}</strong>
+            </div>
+            <div className="diagnostic-row-meta">
+              <span>{event.event}</span>
+              {event.chapter ? <span>{formatDiagnosticChapter(event.chapter)}</span> : null}
+              {event.requestId ? <code>{event.requestId}</code> : null}
+              {event.recordId ? <code>{event.recordId}</code> : null}
+            </div>
+            {event.details && Object.keys(event.details).length ? (
+              <div className="diagnostic-details">
+                {Object.entries(event.details).slice(0, 8).map(([key, value]) => (
+                  <span key={key}>
+                    {key}: {formatDiagnosticValue(value)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -1212,7 +1281,9 @@ function createQueueItem(file: File): QueueItem {
     done: 0,
     total: 0,
     error: "",
-    recordId: ""
+    recordId: "",
+    requestId: "",
+    diagnostics: []
   };
 }
 
@@ -1236,6 +1307,10 @@ function computeQueueStats(items: QueueItem[]) {
 
 function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isLargePdf(bytes: number) {
+  return bytes >= largePdfWarningSize;
 }
 
 function formatQueueStatus(status: QueueStatus) {
@@ -1269,6 +1344,43 @@ function getQueueProgressPercent(item: QueueItem) {
     return Math.max(6, Math.round((item.done / item.total) * 100));
   }
   return item.status === "processing" ? 8 : 0;
+}
+
+function getErrorRequestId(error: unknown) {
+  if (error && typeof error === "object" && "requestId" in error) {
+    const requestId = (error as { requestId?: unknown }).requestId;
+    return typeof requestId === "string" ? requestId : "";
+  }
+  return "";
+}
+
+function formatDiagnosticTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(date);
+}
+
+function formatDiagnosticChapter(chapter: UploadDiagnosticEvent["chapter"]) {
+  if (!chapter) {
+    return "";
+  }
+  const name = chapter.chapter_name || `Chapter ${chapter.chapter_number || "unknown"}`;
+  const fromPage = emptyText(chapter.from_page);
+  const toPage = emptyText(chapter.to_page);
+  return `${name} | Pages ${fromPage}-${toPage}`;
+}
+
+function formatDiagnosticValue(value: string | number | boolean | null) {
+  if (value === null || value === "") {
+    return "none";
+  }
+  return String(value);
 }
 
 function formatFileSize(bytes: number) {

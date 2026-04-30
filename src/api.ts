@@ -1,11 +1,11 @@
-import type { HistoryRecord, ReviewStatus, UploadProgressEvent } from "./types";
+import type { HistoryRecord, ReviewStatus, UploadDiagnosticEvent, UploadProgressEvent } from "./types";
 
 export async function fetchHistory(): Promise<HistoryRecord[]> {
   const response = await fetch("/api/history");
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(body.error || `History load failed: ${response.status}`);
+    throw createRequestError(body.error || `History load failed: ${response.status}`, body.requestId);
   }
 
   return Array.isArray(body.records) ? body.records : [];
@@ -14,7 +14,8 @@ export async function fetchHistory(): Promise<HistoryRecord[]> {
 export async function uploadPdf(
   file: File,
   apiBaseUrl: string,
-  onProgress: (event: UploadProgressEvent) => void
+  onProgress: (event: UploadProgressEvent) => void,
+  onDiagnostic?: (event: UploadDiagnosticEvent) => void
 ): Promise<HistoryRecord> {
   const formData = new FormData();
   formData.append("file", file);
@@ -30,10 +31,10 @@ export async function uploadPdf(
 
   if (!response.ok || !response.body) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `Upload failed: ${response.status}`);
+    throw createRequestError(body.error || `Upload failed: ${response.status}`, body.requestId);
   }
 
-  return readUploadStream(response.body, onProgress);
+  return readUploadStream(response.body, onProgress, onDiagnostic);
 }
 
 export async function updateAuditableReview(
@@ -56,7 +57,7 @@ export async function updateAuditableReview(
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(body.error || `Review update failed: ${response.status}`);
+    throw createRequestError(body.error || `Review update failed: ${response.status}`, body.requestId);
   }
 
   return body.record;
@@ -73,13 +74,14 @@ export async function deleteHistory(password: string): Promise<void> {
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(body.error || `Delete failed: ${response.status}`);
+    throw createRequestError(body.error || `Delete failed: ${response.status}`, body.requestId);
   }
 }
 
 async function readUploadStream(
   stream: ReadableStream<Uint8Array>,
-  onProgress: (event: UploadProgressEvent) => void
+  onProgress: (event: UploadProgressEvent) => void,
+  onDiagnostic?: (event: UploadDiagnosticEvent) => void
 ): Promise<HistoryRecord> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -100,12 +102,17 @@ async function readUploadStream(
         onProgress(parsed.data as UploadProgressEvent);
       }
 
+      if (parsed.event === "log") {
+        onDiagnostic?.(parsed.data as UploadDiagnosticEvent);
+      }
+
       if (parsed.event === "complete") {
         completedRecord = (parsed.data as { record: HistoryRecord }).record;
       }
 
       if (parsed.event === "error") {
-        throw new Error((parsed.data as { error?: string }).error || "Upload failed.");
+        const data = parsed.data as { error?: string; requestId?: string };
+        throw createRequestError(data.error || "Upload failed.", data.requestId);
       }
 
       separatorIndex = buffer.indexOf("\n\n");
@@ -134,4 +141,12 @@ function parseSseEvent(rawEvent: string): { event: string; data: unknown } {
   } catch {
     return { event, data: {} };
   }
+}
+
+function createRequestError(message: string, requestId?: string): Error & { requestId?: string } {
+  const error = new Error(requestId ? `${message} (Request ID: ${requestId})` : message) as Error & {
+    requestId?: string;
+  };
+  error.requestId = requestId;
+  return error;
 }
