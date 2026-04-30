@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { Agent, fetch as undiciFetch } from "undici";
+import { Agent, FormData as UndiciFormData, fetch as undiciFetch } from "undici";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -557,7 +557,7 @@ async function processUploadedPdf({ file, apiBaseUrl, emit, requestId }) {
 }
 
 async function parseCircularPdf(filePath, originalFilename, apiBaseUrl, uploadLog) {
-  const formData = new FormData();
+  const formData = new UndiciFormData();
   const blob = await openAsBlob(filePath, { type: "application/pdf" });
   formData.append("file", blob, originalFilename || "circular.pdf");
   const startedAt = Date.now();
