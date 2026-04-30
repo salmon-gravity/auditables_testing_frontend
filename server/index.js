@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { Agent } from "undici";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,11 @@ const parserTimeoutMs = 30 * 60 * 1000;
 const chapterExtractionTimeoutMs = 8 * 60 * 1000;
 const chapterExtractionConcurrency = 2;
 const sseHeartbeatMs = 20 * 1000;
+const externalApiDispatcher = new Agent({
+  connectTimeout: 60 * 1000,
+  headersTimeout: parserTimeoutMs,
+  bodyTimeout: parserTimeoutMs
+});
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -750,6 +756,7 @@ class ExternalApiError extends Error {
 async function fetchWithTimeout(url, options, timeoutMs) {
   return fetch(url, {
     ...options,
+    dispatcher: externalApiDispatcher,
     signal: AbortSignal.timeout(timeoutMs)
   });
 }
