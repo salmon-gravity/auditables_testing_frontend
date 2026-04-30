@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { Agent } from "undici";
+import { Agent, fetch as undiciFetch } from "undici";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -754,7 +754,7 @@ class ExternalApiError extends Error {
 }
 
 async function fetchWithTimeout(url, options, timeoutMs) {
-  return fetch(url, {
+  return undiciFetch(url, {
     ...options,
     dispatcher: externalApiDispatcher,
     signal: AbortSignal.timeout(timeoutMs)
