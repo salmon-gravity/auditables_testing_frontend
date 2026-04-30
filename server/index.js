@@ -962,10 +962,76 @@ function summarizeError(error, includeStack = false) {
     summary.statusCode = error.statusCode || null;
     summary.retryable = error.retryable;
   }
+  const cause = summarizeErrorCause(error);
+  if (cause) {
+    summary.cause = cause;
+  }
   if (includeStack && error instanceof Error && error.stack) {
     summary.stack = truncateLogString(error.stack).slice(0, 2000);
   }
   return summary;
+}
+
+function summarizeErrorCause(error, depth = 0) {
+  if (!error || typeof error !== "object" || depth >= 4) {
+    return null;
+  }
+
+  const cause = error.cause;
+  if (!cause) {
+    return summarizeAggregateErrors(error, depth);
+  }
+
+  return summarizeThrowable(cause, depth + 1);
+}
+
+function summarizeThrowable(value, depth) {
+  if (!value || depth >= 4) {
+    return null;
+  }
+
+  if (value instanceof Error || typeof value === "object") {
+    const summary = {};
+    const name = value instanceof Error ? value.name : value.name;
+    const message = value instanceof Error ? value.message : value.message;
+    if (name) {
+      summary.name = truncateLogString(String(name));
+    }
+    if (message) {
+      summary.message = truncateLogString(String(message));
+    }
+
+    for (const field of ["code", "errno", "syscall", "address", "port", "host", "hostname", "localAddress", "localPort"]) {
+      if (Object.hasOwn(value, field) && value[field] !== undefined && value[field] !== null) {
+        summary[field] = sanitizeLogValue(field, value[field]);
+      }
+    }
+
+    const nestedCause = summarizeErrorCause(value, depth);
+    if (nestedCause) {
+      summary.cause = nestedCause;
+    }
+
+    const aggregateErrors = summarizeAggregateErrors(value, depth);
+    if (aggregateErrors) {
+      summary.errors = aggregateErrors;
+    }
+
+    return Object.keys(summary).length ? summary : null;
+  }
+
+  return { message: truncateLogString(String(value)) };
+}
+
+function summarizeAggregateErrors(error, depth) {
+  if (!error || typeof error !== "object" || !Array.isArray(error.errors) || depth >= 3) {
+    return null;
+  }
+
+  return error.errors
+    .slice(0, 4)
+    .map((item) => summarizeThrowable(item, depth + 1))
+    .filter(Boolean);
 }
 
 function summarizeApiFailure(body, fallback) {
