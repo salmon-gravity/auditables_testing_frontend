@@ -44,6 +44,7 @@ export async function updateAuditableReview(
     reviewStatus?: ReviewStatus;
     penaltyReviewStatus?: ReviewStatus;
     deadlineReviewStatus?: ReviewStatus;
+    systemReviewStatus?: ReviewStatus;
     remark?: string;
   }
 ): Promise<HistoryRecord> {

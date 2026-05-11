@@ -16,6 +16,7 @@ export interface FieldAccuracySet {
   auditable: AccuracyCounts;
   penalty: AccuracyCounts;
   deadline: AccuracyCounts;
+  system: AccuracyCounts;
   combined: AccuracyCounts;
 }
 
@@ -105,13 +106,14 @@ function computeFieldAccuracySet(rows: AuditableReviewRow[]): FieldAccuracySet {
     auditable: computeAccuracyCounts(rows, (row) => row.reviewStatus),
     penalty: computeAccuracyCounts(rows, (row) => row.penaltyReviewStatus),
     deadline: computeAccuracyCounts(rows, (row) => row.deadlineReviewStatus),
+    system: computeAccuracyCounts(rows, (row) => row.systemReviewStatus),
     combined: computeCombinedAccuracyCounts(rows)
   };
 }
 
 function computeCombinedAccuracyCounts(rows: AuditableReviewRow[]): AccuracyCounts {
   return computeAccuracyCountsFromStatuses(
-    rows.flatMap((row) => [row.reviewStatus, row.penaltyReviewStatus, row.deadlineReviewStatus])
+    rows.flatMap((row) => [row.reviewStatus, row.penaltyReviewStatus, row.deadlineReviewStatus, row.systemReviewStatus])
   );
 }
 

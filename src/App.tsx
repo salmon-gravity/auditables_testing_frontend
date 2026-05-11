@@ -15,6 +15,7 @@ import {
   XCircle
 } from "lucide-react";
 import { deleteHistory, fetchHistory, updateAuditableReview, uploadPdf } from "./api";
+import { getBankingOperationName, getSystemName } from "./catalogs";
 import { computeHistoryInsights } from "./insights";
 import type { DepartmentInsight, HistoryInsights, PdfInsight } from "./insights";
 import type { AuditableReviewRow, HistoryRecord, ReviewStatus, UploadDiagnosticEvent } from "./types";
@@ -45,7 +46,7 @@ interface QueueItem {
   diagnostics: UploadDiagnosticEvent[];
 }
 
-type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "remark">>;
+type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "systemReviewStatus" | "remark">>;
 type AppPage = "review" | "insights";
 
 export default function App() {
@@ -739,6 +740,7 @@ function InsightsSection({ insights }: { insights: HistoryInsights }) {
         <InsightMetric label="Auditable acc" value={formatPercent(insights.fieldTotals.auditable.accuracy, "Not enough")} />
         <InsightMetric label="Penalty acc" value={formatPercent(insights.fieldTotals.penalty.accuracy, "Not enough")} />
         <InsightMetric label="Deadline acc" value={formatPercent(insights.fieldTotals.deadline.accuracy, "Not enough")} />
+        <InsightMetric label="System acc" value={formatPercent(insights.fieldTotals.system.accuracy, "Not enough")} />
         <InsightMetric label="Incorrect fields" value={insights.fieldTotals.combined.incorrect} />
         <InsightMetric label="Issue PDFs" value={insights.pdfsWithExtractionIssues} />
       </div>
@@ -792,6 +794,7 @@ function PdfInsightsTable({ rows }: { rows: PdfInsight[] }) {
               <th>Auditable</th>
               <th>Penalty</th>
               <th>Deadline</th>
+              <th>System</th>
               <th>Failed</th>
               <th>Status</th>
             </tr>
@@ -808,6 +811,7 @@ function PdfInsightsTable({ rows }: { rows: PdfInsight[] }) {
                 <td>{formatPercent(row.fieldCounts.auditable.accuracy, "Not enough")}</td>
                 <td>{formatPercent(row.fieldCounts.penalty.accuracy, "Not enough")}</td>
                 <td>{formatPercent(row.fieldCounts.deadline.accuracy, "Not enough")}</td>
+                <td>{formatPercent(row.fieldCounts.system.accuracy, "Not enough")}</td>
                 <td>{row.failedChapters}</td>
                 <td>{formatRecordStatus(row.status)}</td>
               </tr>
@@ -836,6 +840,7 @@ function DepartmentInsightsTable({ rows }: { rows: DepartmentInsight[] }) {
                 <th>Auditable</th>
                 <th>Penalty</th>
                 <th>Deadline</th>
+                <th>System</th>
                 <th>Incorrect</th>
               </tr>
             </thead>
@@ -850,6 +855,7 @@ function DepartmentInsightsTable({ rows }: { rows: DepartmentInsight[] }) {
                   <td>{formatPercent(row.fieldCounts.auditable.accuracy, "Not enough")}</td>
                   <td>{formatPercent(row.fieldCounts.penalty.accuracy, "Not enough")}</td>
                   <td>{formatPercent(row.fieldCounts.deadline.accuracy, "Not enough")}</td>
+                  <td>{formatPercent(row.fieldCounts.system.accuracy, "Not enough")}</td>
                   <td>{row.fieldCounts.combined.incorrect}</td>
                 </tr>
               ))}
@@ -1041,6 +1047,11 @@ function AuditableDetail({
         />
       </div>
 
+      <SystemOperationsCard
+        row={row}
+        onChange={(status) => onReviewChange(row, { systemReviewStatus: status, remark })}
+      />
+
       <DepartmentDetails row={row} />
 
       <label className="remark-editor">
@@ -1096,6 +1107,85 @@ function FieldReviewCard({
         <ReviewButton status="correct" active={status === "correct"} onClick={() => onChange("correct")} />
         <ReviewButton status="partially_correct" active={status === "partially_correct"} onClick={() => onChange("partially_correct")} />
         <ReviewButton status="incorrect" active={status === "incorrect"} onClick={() => onChange("incorrect")} />
+      </div>
+    </div>
+  );
+}
+
+interface ImpactedOperationDataPoint {
+  system?: number;
+  banking_operation?: number;
+  product?: number;
+}
+
+function getImpactedDataPoints(row: AuditableReviewRow): ImpactedOperationDataPoint[] {
+  const systemData = row.auditable.system_derived_data as
+    | { impacted_operation?: { data_points?: unknown } }
+    | undefined;
+  const points = systemData?.impacted_operation?.data_points;
+  if (!Array.isArray(points)) {
+    return [];
+  }
+  return points.filter((point): point is ImpactedOperationDataPoint => Boolean(point) && typeof point === "object");
+}
+
+function formatProductId(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return "Not mapped";
+  }
+  return `Product ${value}`;
+}
+
+function formatOperationIdHint(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return "";
+  }
+  return `#${value}`;
+}
+
+function SystemOperationsCard({
+  row,
+  onChange
+}: {
+  row: AuditableReviewRow;
+  onChange: (status: Exclude<ReviewStatus, "unmarked">) => void;
+}) {
+  const dataPoints = getImpactedDataPoints(row);
+
+  return (
+    <div className="system-operations-card">
+      <div className="field-review-head">
+        <span>Systems and banking operations</span>
+        <StatusBadge status={row.systemReviewStatus} />
+      </div>
+      {dataPoints.length ? (
+        <ul className="operation-list" aria-label="Impacted operation data points">
+          {dataPoints.map((point, index) => (
+            <li className="operation-row" key={`${point.system}-${point.banking_operation}-${point.product}-${index}`}>
+              <span className="operation-cell">
+                <em>System</em>
+                <strong>{getSystemName(point.system)}</strong>
+                <small>{formatOperationIdHint(point.system)}</small>
+              </span>
+              <span className="operation-cell">
+                <em>Banking operation</em>
+                <strong>{getBankingOperationName(point.banking_operation)}</strong>
+                <small>{formatOperationIdHint(point.banking_operation)}</small>
+              </span>
+              <span className="operation-cell">
+                <em>Product</em>
+                <strong>{formatProductId(point.product)}</strong>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="operation-empty">No impacted operations returned for this auditable.</p>
+      )}
+      <div className="mini-marking-control">
+        <ReviewButton status="correct" active={row.systemReviewStatus === "correct"} onClick={() => onChange("correct")} />
+        <ReviewButton status="partially_correct" active={row.systemReviewStatus === "partially_correct"} onClick={() => onChange("partially_correct")} />
+        <ReviewButton status="incorrect" active={row.systemReviewStatus === "incorrect"} onClick={() => onChange("incorrect")} />
       </div>
     </div>
   );

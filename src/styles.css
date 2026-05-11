@@ -1214,6 +1214,68 @@ table {
   padding: 4px 8px;
 }
 
+.system-operations-card {
+  background: #fbfcfe;
+  border: 1px solid #e2e8f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+.operation-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.operation-row {
+  background: #f3f6fb;
+  border: 1px solid #dfe6f0;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 8px 10px;
+}
+
+.operation-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.operation-cell em {
+  color: #667287;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.operation-cell strong {
+  color: #253348;
+  font-size: 0.88rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.operation-cell small {
+  color: #8a93a3;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.operation-empty {
+  color: #667287;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
 .remark-editor {
   display: grid;
   gap: 7px;
@@ -1341,7 +1403,8 @@ textarea {
   .detail-actions,
   .field-review-grid,
   .mini-marking-control,
-  .detail-grid {
+  .detail-grid,
+  .operation-row {
     grid-template-columns: 1fr;
   }
 
