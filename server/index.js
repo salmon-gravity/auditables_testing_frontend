@@ -232,6 +232,9 @@ app.patch("/api/history/:recordId/auditables/:auditableId", async (req, res, nex
     if (Object.hasOwn(req.body, "systemReviewStatus")) {
       row.systemReviewStatus = validateReviewStatus(req.body.systemReviewStatus);
     }
+    if (Object.hasOwn(req.body, "bankingOperationReviewStatus")) {
+      row.bankingOperationReviewStatus = validateReviewStatus(req.body.bankingOperationReviewStatus);
+    }
     if (Object.hasOwn(req.body, "remark")) {
       row.remark = typeof req.body.remark === "string" ? req.body.remark : "";
     }
@@ -462,6 +465,7 @@ async function processUploadedPdf({ file, apiBaseUrl, emit, requestId }) {
           penaltyReviewStatus: "unmarked",
           deadlineReviewStatus: "unmarked",
           systemReviewStatus: "unmarked",
+          bankingOperationReviewStatus: "unmarked",
           remark: "",
           reviewUpdatedAt: null
         }));
@@ -1208,6 +1212,9 @@ function normalizeReviewRow(row) {
   if (!isValidReviewStatus(row.systemReviewStatus)) {
     row.systemReviewStatus = "unmarked";
   }
+  if (!isValidReviewStatus(row.bankingOperationReviewStatus)) {
+    row.bankingOperationReviewStatus = "unmarked";
+  }
   if (typeof row.remark !== "string") {
     row.remark = "";
   }
@@ -1230,7 +1237,7 @@ function getApiBaseHost(apiBaseUrl) {
 }
 
 function getReviewUpdateFields(body) {
-  return ["reviewStatus", "penaltyReviewStatus", "deadlineReviewStatus", "systemReviewStatus", "remark"]
+  return ["reviewStatus", "penaltyReviewStatus", "deadlineReviewStatus", "systemReviewStatus", "bankingOperationReviewStatus", "remark"]
     .filter((field) => Object.hasOwn(body, field))
     .join(",");
 }

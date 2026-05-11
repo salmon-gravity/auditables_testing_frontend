@@ -1214,66 +1214,112 @@ table {
   padding: 4px 8px;
 }
 
-.system-operations-card {
-  background: #fbfcfe;
-  border: 1px solid #e2e8f1;
-  border-radius: 8px;
+.system-review-grid {
   display: grid;
   gap: 10px;
-  padding: 9px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.operation-list {
+.review-concept-card {
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
   display: grid;
+  gap: 10px;
+  padding: 11px 12px;
+}
+
+.review-concept-card.system-card {
+  background: #f3f7ff;
+  border-color: #c5d6f1;
+  border-left: 4px solid #4f7ed1;
+}
+
+.review-concept-card.banking-card {
+  background: #f4f9f1;
+  border-color: #c9dfb9;
+  border-left: 4px solid #5a9a3d;
+}
+
+.concept-pill-list {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.operation-row {
-  background: #f3f6fb;
-  border: 1px solid #dfe6f0;
-  border-radius: 6px;
-  display: grid;
+.concept-pill {
+  align-items: baseline;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 650;
+  gap: 6px;
+  padding: 4px 10px;
+}
+
+.concept-pill.system {
+  background: #e2ecfd;
+  border-color: #b3c6e6;
+  color: #1f3b73;
+}
+
+.concept-pill.banking {
+  background: #e3f0d8;
+  border-color: #b2cf9c;
+  color: #2c5318;
+}
+
+.concept-pill small {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.concept-empty {
+  color: #667287;
+  font-size: 0.85rem;
+  font-style: italic;
+  margin: 0;
+}
+
+.product-summary {
+  align-items: center;
+  background: #fbfcfe;
+  border: 1px dashed #d6dde8;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 8px 10px;
 }
 
-.operation-cell {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.operation-cell em {
+.product-summary > span {
   color: #667287;
-  font-size: 0.65rem;
-  font-style: normal;
+  font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.operation-cell strong {
-  color: #253348;
-  font-size: 0.88rem;
+.product-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.product-pill {
+  background: #eef1f6;
+  border: 1px solid #d4dbe5;
+  border-radius: 999px;
+  color: #3a4862;
+  font-size: 0.78rem;
   font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.operation-cell small {
-  color: #8a93a3;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
-
-.operation-empty {
-  color: #667287;
-  font-size: 0.85rem;
-  margin: 0;
+  padding: 3px 9px;
 }
 
 .remark-editor {
@@ -1404,7 +1450,7 @@ textarea {
   .field-review-grid,
   .mini-marking-control,
   .detail-grid,
-  .operation-row {
+  .system-review-grid {
     grid-template-columns: 1fr;
   }
 

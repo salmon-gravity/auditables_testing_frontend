@@ -46,7 +46,7 @@ interface QueueItem {
   diagnostics: UploadDiagnosticEvent[];
 }
 
-type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "systemReviewStatus" | "remark">>;
+type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "systemReviewStatus" | "bankingOperationReviewStatus" | "remark">>;
 type AppPage = "review" | "insights";
 
 export default function App() {
@@ -741,6 +741,7 @@ function InsightsSection({ insights }: { insights: HistoryInsights }) {
         <InsightMetric label="Penalty acc" value={formatPercent(insights.fieldTotals.penalty.accuracy, "Not enough")} />
         <InsightMetric label="Deadline acc" value={formatPercent(insights.fieldTotals.deadline.accuracy, "Not enough")} />
         <InsightMetric label="System acc" value={formatPercent(insights.fieldTotals.system.accuracy, "Not enough")} />
+        <InsightMetric label="Banking op acc" value={formatPercent(insights.fieldTotals.bankingOperation.accuracy, "Not enough")} />
         <InsightMetric label="Incorrect fields" value={insights.fieldTotals.combined.incorrect} />
         <InsightMetric label="Issue PDFs" value={insights.pdfsWithExtractionIssues} />
       </div>
@@ -795,6 +796,7 @@ function PdfInsightsTable({ rows }: { rows: PdfInsight[] }) {
               <th>Penalty</th>
               <th>Deadline</th>
               <th>System</th>
+              <th>Banking op</th>
               <th>Failed</th>
               <th>Status</th>
             </tr>
@@ -812,6 +814,7 @@ function PdfInsightsTable({ rows }: { rows: PdfInsight[] }) {
                 <td>{formatPercent(row.fieldCounts.penalty.accuracy, "Not enough")}</td>
                 <td>{formatPercent(row.fieldCounts.deadline.accuracy, "Not enough")}</td>
                 <td>{formatPercent(row.fieldCounts.system.accuracy, "Not enough")}</td>
+                <td>{formatPercent(row.fieldCounts.bankingOperation.accuracy, "Not enough")}</td>
                 <td>{row.failedChapters}</td>
                 <td>{formatRecordStatus(row.status)}</td>
               </tr>
@@ -841,6 +844,7 @@ function DepartmentInsightsTable({ rows }: { rows: DepartmentInsight[] }) {
                 <th>Penalty</th>
                 <th>Deadline</th>
                 <th>System</th>
+                <th>Banking op</th>
                 <th>Incorrect</th>
               </tr>
             </thead>
@@ -856,6 +860,7 @@ function DepartmentInsightsTable({ rows }: { rows: DepartmentInsight[] }) {
                   <td>{formatPercent(row.fieldCounts.penalty.accuracy, "Not enough")}</td>
                   <td>{formatPercent(row.fieldCounts.deadline.accuracy, "Not enough")}</td>
                   <td>{formatPercent(row.fieldCounts.system.accuracy, "Not enough")}</td>
+                  <td>{formatPercent(row.fieldCounts.bankingOperation.accuracy, "Not enough")}</td>
                   <td>{row.fieldCounts.combined.incorrect}</td>
                 </tr>
               ))}
@@ -1047,10 +1052,18 @@ function AuditableDetail({
         />
       </div>
 
-      <SystemOperationsCard
-        row={row}
-        onChange={(status) => onReviewChange(row, { systemReviewStatus: status, remark })}
-      />
+      <div className="system-review-grid">
+        <SystemReviewCard
+          row={row}
+          onChange={(status) => onReviewChange(row, { systemReviewStatus: status, remark })}
+        />
+        <BankingOperationReviewCard
+          row={row}
+          onChange={(status) => onReviewChange(row, { bankingOperationReviewStatus: status, remark })}
+        />
+      </div>
+
+      <ProductSummary row={row} />
 
       <DepartmentDetails row={row} />
 
@@ -1129,63 +1142,139 @@ function getImpactedDataPoints(row: AuditableReviewRow): ImpactedOperationDataPo
   return points.filter((point): point is ImpactedOperationDataPoint => Boolean(point) && typeof point === "object");
 }
 
-function formatProductId(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return "Not mapped";
-  }
-  return `Product ${value}`;
+interface NamedEntry {
+  id: number;
+  name: string;
 }
 
-function formatOperationIdHint(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return "";
+function dedupeNamed(entries: NamedEntry[]): NamedEntry[] {
+  const seen = new Set<number>();
+  const result: NamedEntry[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.id)) {
+      continue;
+    }
+    seen.add(entry.id);
+    result.push(entry);
   }
-  return `#${value}`;
+  return result;
 }
 
-function SystemOperationsCard({
+function getSystemsForRow(row: AuditableReviewRow): NamedEntry[] {
+  return dedupeNamed(
+    getImpactedDataPoints(row)
+      .map((point) => point.system)
+      .filter((id): id is number => typeof id === "number" && Number.isFinite(id) && id >= 0)
+      .map((id) => ({ id, name: getSystemName(id) }))
+  );
+}
+
+function getBankingOperationsForRow(row: AuditableReviewRow): NamedEntry[] {
+  return dedupeNamed(
+    getImpactedDataPoints(row)
+      .map((point) => point.banking_operation)
+      .filter((id): id is number => typeof id === "number" && Number.isFinite(id) && id >= 0)
+      .map((id) => ({ id, name: getBankingOperationName(id) }))
+  );
+}
+
+function getProductsForRow(row: AuditableReviewRow): number[] {
+  const seen = new Set<number>();
+  for (const point of getImpactedDataPoints(row)) {
+    const productId = point.product;
+    if (typeof productId === "number" && Number.isFinite(productId) && productId >= 0) {
+      seen.add(productId);
+    }
+  }
+  return Array.from(seen);
+}
+
+function SystemReviewCard({
   row,
   onChange
 }: {
   row: AuditableReviewRow;
   onChange: (status: Exclude<ReviewStatus, "unmarked">) => void;
 }) {
-  const dataPoints = getImpactedDataPoints(row);
+  const systems = getSystemsForRow(row);
 
   return (
-    <div className="system-operations-card">
+    <div className="review-concept-card system-card">
       <div className="field-review-head">
-        <span>Systems and banking operations</span>
+        <span>System</span>
         <StatusBadge status={row.systemReviewStatus} />
       </div>
-      {dataPoints.length ? (
-        <ul className="operation-list" aria-label="Impacted operation data points">
-          {dataPoints.map((point, index) => (
-            <li className="operation-row" key={`${point.system}-${point.banking_operation}-${point.product}-${index}`}>
-              <span className="operation-cell">
-                <em>System</em>
-                <strong>{getSystemName(point.system)}</strong>
-                <small>{formatOperationIdHint(point.system)}</small>
-              </span>
-              <span className="operation-cell">
-                <em>Banking operation</em>
-                <strong>{getBankingOperationName(point.banking_operation)}</strong>
-                <small>{formatOperationIdHint(point.banking_operation)}</small>
-              </span>
-              <span className="operation-cell">
-                <em>Product</em>
-                <strong>{formatProductId(point.product)}</strong>
-              </span>
+      {systems.length ? (
+        <ul className="concept-pill-list" aria-label="Mapped systems">
+          {systems.map((entry) => (
+            <li className="concept-pill system" key={entry.id}>
+              <strong>{entry.name}</strong>
+              <small>#{entry.id}</small>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="operation-empty">No impacted operations returned for this auditable.</p>
+        <p className="concept-empty">No system mapped.</p>
       )}
       <div className="mini-marking-control">
         <ReviewButton status="correct" active={row.systemReviewStatus === "correct"} onClick={() => onChange("correct")} />
         <ReviewButton status="partially_correct" active={row.systemReviewStatus === "partially_correct"} onClick={() => onChange("partially_correct")} />
         <ReviewButton status="incorrect" active={row.systemReviewStatus === "incorrect"} onClick={() => onChange("incorrect")} />
+      </div>
+    </div>
+  );
+}
+
+function BankingOperationReviewCard({
+  row,
+  onChange
+}: {
+  row: AuditableReviewRow;
+  onChange: (status: Exclude<ReviewStatus, "unmarked">) => void;
+}) {
+  const operations = getBankingOperationsForRow(row);
+
+  return (
+    <div className="review-concept-card banking-card">
+      <div className="field-review-head">
+        <span>Banking operation</span>
+        <StatusBadge status={row.bankingOperationReviewStatus} />
+      </div>
+      {operations.length ? (
+        <ul className="concept-pill-list" aria-label="Mapped banking operations">
+          {operations.map((entry) => (
+            <li className="concept-pill banking" key={entry.id}>
+              <strong>{entry.name}</strong>
+              <small>#{entry.id}</small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="concept-empty">No banking operation mapped.</p>
+      )}
+      <div className="mini-marking-control">
+        <ReviewButton status="correct" active={row.bankingOperationReviewStatus === "correct"} onClick={() => onChange("correct")} />
+        <ReviewButton status="partially_correct" active={row.bankingOperationReviewStatus === "partially_correct"} onClick={() => onChange("partially_correct")} />
+        <ReviewButton status="incorrect" active={row.bankingOperationReviewStatus === "incorrect"} onClick={() => onChange("incorrect")} />
+      </div>
+    </div>
+  );
+}
+
+function ProductSummary({ row }: { row: AuditableReviewRow }) {
+  const products = getProductsForRow(row);
+  if (!products.length) {
+    return null;
+  }
+  return (
+    <div className="product-summary" aria-label="Mapped products">
+      <span>Products</span>
+      <div className="product-pill-row">
+        {products.map((id) => (
+          <span className="product-pill" key={id}>
+            Product {id}
+          </span>
+        ))}
       </div>
     </div>
   );
