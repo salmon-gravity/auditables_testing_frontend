@@ -54,6 +54,8 @@ export interface AuditableReviewRow {
   deadlineReviewStatus: ReviewStatus;
   systemReviewStatus: ReviewStatus;
   bankingOperationReviewStatus: ReviewStatus;
+  correctedSystems: number[];
+  correctedBankingOperations: number[];
   remark: string;
   reviewUpdatedAt: string | null;
 }

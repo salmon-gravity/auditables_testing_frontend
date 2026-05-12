@@ -183,6 +183,20 @@ export const bankingOperationCatalog: Record<number, string> = {
   161: "SWEEP IN / SWEEP OUT"
 };
 
+export interface CatalogOption {
+  id: number;
+  name: string;
+}
+
+function buildOptions(catalog: Record<number, string>): CatalogOption[] {
+  return Object.entries(catalog)
+    .map(([id, name]) => ({ id: Number(id), name }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+}
+
+export const systemOptions: CatalogOption[] = buildOptions(systemCatalog);
+export const bankingOperationOptions: CatalogOption[] = buildOptions(bankingOperationCatalog);
+
 export function getSystemName(id: unknown): string {
   if (typeof id !== "number" || !Number.isFinite(id) || id < 0) {
     return "Not mapped";

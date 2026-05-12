@@ -235,6 +235,12 @@ app.patch("/api/history/:recordId/auditables/:auditableId", async (req, res, nex
     if (Object.hasOwn(req.body, "bankingOperationReviewStatus")) {
       row.bankingOperationReviewStatus = validateReviewStatus(req.body.bankingOperationReviewStatus);
     }
+    if (Object.hasOwn(req.body, "correctedSystems")) {
+      row.correctedSystems = validateIdList(req.body.correctedSystems, "correctedSystems");
+    }
+    if (Object.hasOwn(req.body, "correctedBankingOperations")) {
+      row.correctedBankingOperations = validateIdList(req.body.correctedBankingOperations, "correctedBankingOperations");
+    }
     if (Object.hasOwn(req.body, "remark")) {
       row.remark = typeof req.body.remark === "string" ? req.body.remark : "";
     }
@@ -466,6 +472,8 @@ async function processUploadedPdf({ file, apiBaseUrl, emit, requestId }) {
           deadlineReviewStatus: "unmarked",
           systemReviewStatus: "unmarked",
           bankingOperationReviewStatus: "unmarked",
+          correctedSystems: [],
+          correctedBankingOperations: [],
           remark: "",
           reviewUpdatedAt: null
         }));
@@ -1117,6 +1125,26 @@ function validateReviewStatus(value) {
   throw new Error("Invalid review status.");
 }
 
+function validateIdList(value, fieldName) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array of numeric ids.`);
+  }
+  const result = [];
+  const seen = new Set();
+  for (const candidate of value) {
+    if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate < 0) {
+      throw new Error(`${fieldName} contains an invalid id.`);
+    }
+    const id = Math.trunc(candidate);
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
 function normalizeApiBaseUrl(value) {
   const raw = typeof value === "string" && value.trim() ? value.trim() : defaultApiBaseUrl;
   return raw.replace(/\/+$/, "");
@@ -1215,6 +1243,8 @@ function normalizeReviewRow(row) {
   if (!isValidReviewStatus(row.bankingOperationReviewStatus)) {
     row.bankingOperationReviewStatus = "unmarked";
   }
+  row.correctedSystems = sanitizeIdList(row.correctedSystems);
+  row.correctedBankingOperations = sanitizeIdList(row.correctedBankingOperations);
   if (typeof row.remark !== "string") {
     row.remark = "";
   }
@@ -1228,6 +1258,26 @@ function isValidReviewStatus(value) {
   return ["unmarked", "correct", "partially_correct", "incorrect"].includes(value);
 }
 
+function sanitizeIdList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result = [];
+  const seen = new Set();
+  for (const candidate of value) {
+    if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate < 0) {
+      continue;
+    }
+    const id = Math.trunc(candidate);
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
 function getApiBaseHost(apiBaseUrl) {
   try {
     return new URL(apiBaseUrl).host;
@@ -1237,7 +1287,7 @@ function getApiBaseHost(apiBaseUrl) {
 }
 
 function getReviewUpdateFields(body) {
-  return ["reviewStatus", "penaltyReviewStatus", "deadlineReviewStatus", "systemReviewStatus", "bankingOperationReviewStatus", "remark"]
+  return ["reviewStatus", "penaltyReviewStatus", "deadlineReviewStatus", "systemReviewStatus", "bankingOperationReviewStatus", "correctedSystems", "correctedBankingOperations", "remark"]
     .filter((field) => Object.hasOwn(body, field))
     .join(",");
 }

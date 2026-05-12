@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
   Circle,
   ClipboardList,
   FileText,
@@ -12,10 +13,12 @@ import {
   Search,
   Trash2,
   Upload,
+  X,
   XCircle
 } from "lucide-react";
 import { deleteHistory, fetchHistory, updateAuditableReview, uploadPdf } from "./api";
-import { getBankingOperationName, getSystemName } from "./catalogs";
+import { bankingOperationOptions, getBankingOperationName, getSystemName, systemOptions } from "./catalogs";
+import type { CatalogOption } from "./catalogs";
 import { computeHistoryInsights } from "./insights";
 import type { DepartmentInsight, HistoryInsights, PdfInsight } from "./insights";
 import type { AuditableReviewRow, HistoryRecord, ReviewStatus, UploadDiagnosticEvent } from "./types";
@@ -46,7 +49,7 @@ interface QueueItem {
   diagnostics: UploadDiagnosticEvent[];
 }
 
-type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "systemReviewStatus" | "bankingOperationReviewStatus" | "remark">>;
+type ReviewPatch = Partial<Pick<AuditableReviewRow, "reviewStatus" | "penaltyReviewStatus" | "deadlineReviewStatus" | "systemReviewStatus" | "bankingOperationReviewStatus" | "correctedSystems" | "correctedBankingOperations" | "remark">>;
 type AppPage = "review" | "insights";
 
 export default function App() {
@@ -1056,10 +1059,12 @@ function AuditableDetail({
         <SystemReviewCard
           row={row}
           onChange={(status) => onReviewChange(row, { systemReviewStatus: status, remark })}
+          onCorrectionChange={(ids) => onReviewChange(row, { correctedSystems: ids, remark })}
         />
         <BankingOperationReviewCard
           row={row}
           onChange={(status) => onReviewChange(row, { bankingOperationReviewStatus: status, remark })}
+          onCorrectionChange={(ids) => onReviewChange(row, { correctedBankingOperations: ids, remark })}
         />
       </div>
 
@@ -1189,12 +1194,18 @@ function getProductsForRow(row: AuditableReviewRow): number[] {
   return Array.from(seen);
 }
 
+function needsCorrection(status: ReviewStatus) {
+  return status === "incorrect" || status === "partially_correct";
+}
+
 function SystemReviewCard({
   row,
-  onChange
+  onChange,
+  onCorrectionChange
 }: {
   row: AuditableReviewRow;
   onChange: (status: Exclude<ReviewStatus, "unmarked">) => void;
+  onCorrectionChange: (ids: number[]) => void;
 }) {
   const systems = getSystemsForRow(row);
 
@@ -1221,16 +1232,28 @@ function SystemReviewCard({
         <ReviewButton status="partially_correct" active={row.systemReviewStatus === "partially_correct"} onClick={() => onChange("partially_correct")} />
         <ReviewButton status="incorrect" active={row.systemReviewStatus === "incorrect"} onClick={() => onChange("incorrect")} />
       </div>
+      {needsCorrection(row.systemReviewStatus) ? (
+        <CorrectionPicker
+          variant="system"
+          label="Correct systems"
+          placeholder="Select correct system(s)"
+          options={systemOptions}
+          selected={row.correctedSystems}
+          onChange={onCorrectionChange}
+        />
+      ) : null}
     </div>
   );
 }
 
 function BankingOperationReviewCard({
   row,
-  onChange
+  onChange,
+  onCorrectionChange
 }: {
   row: AuditableReviewRow;
   onChange: (status: Exclude<ReviewStatus, "unmarked">) => void;
+  onCorrectionChange: (ids: number[]) => void;
 }) {
   const operations = getBankingOperationsForRow(row);
 
@@ -1257,6 +1280,186 @@ function BankingOperationReviewCard({
         <ReviewButton status="partially_correct" active={row.bankingOperationReviewStatus === "partially_correct"} onClick={() => onChange("partially_correct")} />
         <ReviewButton status="incorrect" active={row.bankingOperationReviewStatus === "incorrect"} onClick={() => onChange("incorrect")} />
       </div>
+      {needsCorrection(row.bankingOperationReviewStatus) ? (
+        <CorrectionPicker
+          variant="banking"
+          label="Correct banking operations"
+          placeholder="Select correct banking operation(s)"
+          options={bankingOperationOptions}
+          selected={row.correctedBankingOperations}
+          onChange={onCorrectionChange}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CorrectionPicker({
+  variant,
+  label,
+  placeholder,
+  options,
+  selected,
+  onChange
+}: {
+  variant: "system" | "banking";
+  label: string;
+  placeholder: string;
+  options: CatalogOption[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function handleDocumentClick(event: MouseEvent) {
+      if (!containerRef.current) {
+        return;
+      }
+      if (!containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleDocumentClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      searchInputRef.current?.focus();
+    } else {
+      setQuery("");
+    }
+  }, [open]);
+
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const filteredOptions = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return options;
+    }
+    return options.filter((option) =>
+      option.name.toLowerCase().includes(normalized) || String(option.id).includes(normalized)
+    );
+  }, [options, query]);
+
+  function toggle(id: number) {
+    if (selectedSet.has(id)) {
+      onChange(selected.filter((value) => value !== id));
+    } else {
+      onChange([...selected, id]);
+    }
+  }
+
+  function removeAt(id: number) {
+    onChange(selected.filter((value) => value !== id));
+  }
+
+  function clearAll() {
+    if (!selected.length) {
+      return;
+    }
+    onChange([]);
+  }
+
+  return (
+    <div className={`correction-picker ${variant}`} ref={containerRef}>
+      <div className="correction-head">
+        <span>{label}</span>
+        {selected.length ? (
+          <button className="ghost-button correction-clear" type="button" onClick={clearAll}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`correction-trigger ${variant}`}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>
+          {selected.length ? `${selected.length} selected` : placeholder}
+        </span>
+        <ChevronDown size={16} />
+      </button>
+      {selected.length ? (
+        <ul className="correction-selected-list" aria-label={`Selected ${label}`}>
+          {selected.map((id) => {
+            const option = options.find((entry) => entry.id === id);
+            const name = option?.name || (variant === "system" ? getSystemName(id) : getBankingOperationName(id));
+            return (
+              <li className={`concept-pill ${variant} removable`} key={id}>
+                <strong>{name}</strong>
+                <small>#{id}</small>
+                <button
+                  aria-label={`Remove ${name}`}
+                  className="pill-remove"
+                  type="button"
+                  onClick={() => removeAt(id)}
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {open ? (
+        <div className="correction-popover" role="listbox" aria-multiselectable="true">
+          <label className="correction-search">
+            <Search size={14} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search"
+            />
+          </label>
+          <div className="correction-options">
+            {filteredOptions.length ? (
+              filteredOptions.map((option) => {
+                const checked = selectedSet.has(option.id);
+                return (
+                  <button
+                    aria-selected={checked}
+                    className={`correction-option ${checked ? "is-selected" : ""}`}
+                    key={option.id}
+                    role="option"
+                    type="button"
+                    onClick={() => toggle(option.id)}
+                  >
+                    <span className={`correction-checkbox ${checked ? "is-checked" : ""}`} aria-hidden="true">
+                      {checked ? <CheckCircle2 size={14} /> : null}
+                    </span>
+                    <span className="correction-option-name">{option.name}</span>
+                    <span className="correction-option-id">#{option.id}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="correction-empty">No matches.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
